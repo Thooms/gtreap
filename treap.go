@@ -66,7 +66,7 @@ func (t *Treap) Get(target Item) Item {
 // ignored.  To change the priority for an item, you need to do a
 // Delete then an Upsert.
 func (t *Treap) Upsert(item Item, itemPriority int) *Treap {
-	r := t.union(t.root, &node{item: item, priority: itemPriority})
+	r := t.unionItem(t.root, item, itemPriority)
 	return &Treap{compare: t.compare, root: r}
 }
 
@@ -77,6 +77,11 @@ func (t *Treap) union(this *node, that *node) *node {
 	if that == nil {
 		return this
 	}
+
+	if that.left == nil && that.right == nil {
+		return t.unionItem(this, that.item, that.priority)
+	}
+
 	if this.priority > that.priority {
 		left, middle, right := t.split(that, this.item)
 		if middle == nil {
@@ -101,6 +106,43 @@ func (t *Treap) union(this *node, that *node) *node {
 		priority: that.priority,
 		left:     t.union(left, that.left),
 		right:    t.union(right, that.right),
+	}
+}
+
+func (t *Treap) unionItem(this *node, item Item, itemPriority int) *node {
+	if this == nil {
+		return &node{item: item, priority: itemPriority}
+	}
+	if item == nil {
+		return this
+	}
+
+	if this.priority > itemPriority {
+		// TODO maybe we don't need the alloc here
+		left, middle, right := t.split(&node{item: item, priority: itemPriority}, this.item)
+
+		if middle == nil {
+			return &node{
+				item:     this.item,
+				priority: this.priority,
+				left:     t.union(this.left, left),
+				right:    t.union(this.right, right),
+			}
+		}
+		return &node{
+			item:     middle.item,
+			priority: this.priority,
+			left:     t.union(this.left, left),
+			right:    t.union(this.right, right),
+		}
+	}
+
+	left, _, right := t.split(this, item)
+	return &node{
+		item: item,
+		priority: itemPriority,
+		left: left,
+		right: right,
 	}
 }
 
