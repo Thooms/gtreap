@@ -15,7 +15,6 @@ func init() {
 	}
 }
 
-
 type Treap struct {
 	compare Compare
 	root    *node
@@ -34,6 +33,14 @@ type node struct {
 	priority int
 	left     *node
 	right    *node
+}
+
+func (n *node) reuseWith(item Item, priority int, left, right *node) *node {
+	n.item = item
+	n.priority = priority
+	n.left = left
+	n.right = right
+	return n
 }
 
 func NewTreap(c Compare) *Treap {
@@ -115,6 +122,8 @@ func (t *Treap) union(this *node, that *node) *node {
 		left, middle, right := t.split(that, i)
 
 		if middle == nil {
+			//return this.reuseWith(i, p, t.union(l, left), t.union(r, right))
+
 			return newNode(i, p, t.union(l, left), t.union(r, right))
 			// return &node{
 			//	item:     i,
@@ -135,7 +144,10 @@ func (t *Treap) union(this *node, that *node) *node {
 	i, p, l, r := that.item, that.priority, that.left, that.right
 
 	// We don't use middle because the "that" has precendence.
-	left, _, right := t.split(this, i)
+	left, middle, right := t.split(this, i)
+	if middle != nil {
+		nodePool.Put(middle)
+	}
 
 	return newNode(i, p, t.union(left, l), t.union(right, r))
 
