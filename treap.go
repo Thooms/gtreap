@@ -71,6 +71,7 @@ func (t *Treap) Upsert(item Item, itemPriority int) *Treap {
 }
 
 func (t *Treap) union(this *node, that *node) *node {
+	panic("yolo")
 	if this == nil {
 		return that
 	}
