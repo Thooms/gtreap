@@ -1,8 +1,12 @@
 package gtreap
 
+import "sync"
+
+
 type Treap struct {
 	compare Compare
 	root    *node
+	nodePool *sync.Pool
 }
 
 // Compare returns an integer comparing the two items
@@ -21,7 +25,22 @@ type node struct {
 }
 
 func NewTreap(c Compare) *Treap {
-	return &Treap{compare: c, root: nil}
+	return &Treap{
+		compare: c,
+		root: nil,
+		nodePool: &sync.Pool{
+			New: func() interface{} { return &node{} },
+		},
+	}
+}
+
+func (t *Treap) newNode(item Item, priority int, left, right *node) *node {
+	n := t.nodePool.Get().(*node)
+	n.item = item
+	n.priority = priority
+	n.left = left
+	n.right = right
+	return n
 }
 
 func (t *Treap) Min() Item {
@@ -67,11 +86,10 @@ func (t *Treap) Get(target Item) Item {
 // Delete then an Upsert.
 func (t *Treap) Upsert(item Item, itemPriority int) *Treap {
 	r := t.union(t.root, &node{item: item, priority: itemPriority})
-	return &Treap{compare: t.compare, root: r}
+	return &Treap{compare: t.compare, root: r, nodePool: t.nodePool}
 }
 
 func (t *Treap) union(this *node, that *node) *node {
-	panic("yolo")
 	if this == nil {
 		return that
 	}
@@ -79,29 +97,41 @@ func (t *Treap) union(this *node, that *node) *node {
 		return this
 	}
 	if this.priority > that.priority {
-		left, middle, right := t.split(that, this.item)
+		i, p, l, r := this.item, this.priority, this.left, this.right
+		defer t.nodePool.Put(this)
+
+		left, middle, right := t.split(that, i)
+
 		if middle == nil {
-			return &node{
-				item:     this.item,
-				priority: this.priority,
-				left:     t.union(this.left, left),
-				right:    t.union(this.right, right),
-			}
+			return t.newNode(i, p, t.union(l, left), t.union(r, right))
+			// return &node{
+			//	item:     i,
+			//	priority: p,
+			//	left:     t.union(l, left),
+			//	right:    t.union(r, right),
+			// }
 		}
-		return &node{
-			item:     middle.item,
-			priority: this.priority,
-			left:     t.union(this.left, left),
-			right:    t.union(this.right, right),
-		}
+		defer t.nodePool.Put(middle)
+		return t.newNode(middle.item, p, t.union(l, left), t.union(r, right))
+		// return &node{
+		//	item:     middle.item,
+		//	priority: p,
+		//	left:     t.union(l, left),
+		//	right:    t.union(r, right),
+		// }
 	}
+
+	i, p, l, r := that.item, that.priority, that.left, that.right
+	defer t.nodePool.Put(that)
+
 	// We don't use middle because the "that" has precendence.
-	left, _, right := t.split(this, that.item)
+	left, _, right := t.split(this, i)
+
 	return &node{
-		item:     that.item,
-		priority: that.priority,
-		left:     t.union(left, that.left),
-		right:    t.union(right, that.right),
+		item:     i,
+		priority: p,
+		left:     t.union(left, l),
+		right:    t.union(right, r),
 	}
 }
 
@@ -139,7 +169,7 @@ func (t *Treap) split(n *node, s Item) (*node, *node, *node) {
 
 func (t *Treap) Delete(target Item) *Treap {
 	left, _, right := t.split(t.root, target)
-	return &Treap{compare: t.compare, root: t.join(left, right)}
+	return &Treap{compare: t.compare, root: t.join(left, right), nodePool: t.nodePool}
 }
 
 // All the items from this are < items from that.
