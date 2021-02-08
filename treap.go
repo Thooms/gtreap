@@ -1,6 +1,9 @@
 package gtreap
 
-import "sync"
+import (
+	"sync"
+	"runtime"
+)
 
 
 type Treap struct {
@@ -40,6 +43,10 @@ func (t *Treap) newNode(item Item, priority int, left, right *node) *node {
 	n.priority = priority
 	n.left = left
 	n.right = right
+
+	runtime.SetFinalizer(n, func(n_ *node) {
+		t.nodePool.Put(n_)
+	})
 	return n
 }
 
@@ -98,7 +105,6 @@ func (t *Treap) union(this *node, that *node) *node {
 	}
 	if this.priority > that.priority {
 		i, p, l, r := this.item, this.priority, this.left, this.right
-		defer t.nodePool.Put(this)
 
 		left, middle, right := t.split(that, i)
 
@@ -111,7 +117,6 @@ func (t *Treap) union(this *node, that *node) *node {
 			//	right:    t.union(r, right),
 			// }
 		}
-		defer t.nodePool.Put(middle)
 		return t.newNode(middle.item, p, t.union(l, left), t.union(r, right))
 		// return &node{
 		//	item:     middle.item,
@@ -122,7 +127,6 @@ func (t *Treap) union(this *node, that *node) *node {
 	}
 
 	i, p, l, r := that.item, that.priority, that.left, that.right
-	defer t.nodePool.Put(that)
 
 	// We don't use middle because the "that" has precendence.
 	left, _, right := t.split(this, i)
@@ -151,12 +155,14 @@ func (t *Treap) split(n *node, s Item) (*node, *node, *node) {
 	}
 	if c < 0 {
 		left, middle, right := t.split(n.left, s)
-		return left, middle, &node{
-			item:     n.item,
-			priority: n.priority,
-			left:     right,
-			right:    n.right,
-		}
+
+		return left, middle, t.newNode(n.item, n.priority, right, n.right)
+		// &node{
+		//	item:     n.item,
+		//	priority: n.priority,
+		//	left:     right,
+		//	right:    n.right,
+		// }
 	}
 	left, middle, right := t.split(n.right, s)
 	return &node{

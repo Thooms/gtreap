@@ -111,6 +111,7 @@ func visitExpect(t *testing.T, x *Treap, start string, arr []string) {
 }
 
 func TestVisit(t *testing.T) {
+
 	x := NewTreap(stringCompare)
 	visitExpect(t, x, "a", []string{})
 
